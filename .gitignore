@@ -1,0 +1,31 @@
+# 构建产物
+**/build/
+*.o
+*.a
+*.obj
+*.exe
+*.so
+*.so.*
+
+# 备份与临时文件
+*.bak
+*.bak.*
+*.real.*
+*.orig
+*.rej
+*~
+
+# 日志
+*.log
+*.out.log
+*.err.log
+
+# 编辑器/IDE
+.vscode/
+.idea/
+CMakeLists.txt.user*
+*.user
+
+# 系统
+.DS_Store
+Thumbs.db
