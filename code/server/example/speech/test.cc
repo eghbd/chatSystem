@@ -1,4 +1,6 @@
 #include "aip-cpp-sdk/speech.h"
+#include <cstdlib>
+#include <iostream>
 
 void asr(aip::Speech &client)
 {
@@ -16,10 +18,17 @@ void asr(aip::Speech &client)
 
 int main()
 {
-    // 设置APPID/AK/SK
-    std::string app_id = "60694095";
-    std::string api_key = "REMOVED";
-    std::string secret_key = "REMOVED";
+    // 设置APPID/AK/SK：从环境变量读取，不写进代码
+    const char *app_id_env = getenv("BAIDU_APP_ID");
+    const char *api_key_env = getenv("BAIDU_API_KEY");
+    const char *secret_key_env = getenv("BAIDU_SECRET_KEY");
+    if (app_id_env == nullptr || api_key_env == nullptr || secret_key_env == nullptr) {
+        std::cerr << "请先设置环境变量 BAIDU_APP_ID / BAIDU_API_KEY / BAIDU_SECRET_KEY" << std::endl;
+        return -1;
+    }
+    std::string app_id = app_id_env;
+    std::string api_key = api_key_env;
+    std::string secret_key = secret_key_env;
 
     aip::Speech client(app_id, api_key, secret_key);
 
