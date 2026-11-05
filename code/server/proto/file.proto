@@ -1,0 +1,85 @@
+syntax = "proto3";        // 指定使用 proto3 语法
+package bite_im;          // 声明所在的命名空间（C++ 中会生成 namespace bite_im）
+import "base.proto";      // 引入基础数据结构（如 FileDownloadData, FileUploadData, FileMessageInfo）
+
+// 告诉 protoc，生成 C++ 代码时，除了生成消息类，还要生成通用的 RPC 服务接口
+option cc_generic_services = true; 
+
+/* ============================================================
+ * 1. 单文件下载 (GetSingleFile)
+ * ============================================================ */
+message GetSingleFileReq {
+    string request_id = 1;     // 请求ID，用于链路追踪
+    string file_id = 2;        // 要下载的文件唯一ID
+    optional string user_id = 3;    // 可选：用户ID
+    optional string session_id = 4; // 可选：会话ID
+}
+message GetSingleFileRsp {
+    string request_id = 1;     // 回传请求ID
+    bool success = 2;          // 成功标志位
+    string errmsg = 3;         // 如果失败，返回的错误信息
+    optional FileDownloadData file_data = 4; // 成功时返回的文件数据（包含文件ID和二进制内容）
+}
+
+/* ============================================================
+ * 2. 多文件下载 (GetMultiFile)
+ * ============================================================ */
+message GetMultiFileReq {
+    string request_id = 1;     
+    optional string user_id = 2;
+    optional string session_id = 3;
+    repeated string file_id_list = 4; // repeated 相当于数组/列表，传入多个文件ID
+}
+message GetMultiFileRsp {
+    string request_id = 1;
+    bool success = 2;
+    string errmsg = 3; 
+    // map 相当于哈希表，返回 文件ID -> 对应文件数据 的映射
+    map<string, FileDownloadData> file_data = 4; 
+}
+
+/* ============================================================
+ * 3. 单文件上传 (PutSingleFile)
+ * ============================================================ */
+message PutSingleFileReq {
+    string request_id = 1; 
+    optional string user_id = 2;
+    optional string session_id = 3;
+    FileUploadData file_data = 4; // 必备：上传的文件数据（包含文件名、大小、二进制内容）
+}
+message PutSingleFileRsp {
+    string request_id = 1;
+    bool success = 2;
+    string errmsg = 3;
+    FileMessageInfo file_info = 4; // 返回文件元信息（包含文件ID、大小、文件名，供客户端后续发消息使用）
+}
+
+/* ============================================================
+ * 4. 多文件上传 (PutMultiFile)
+ * ============================================================ */
+message PutMultiFileReq {
+    string request_id = 1;
+    optional string user_id = 2;
+    optional string session_id = 3;
+    repeated FileUploadData file_data = 4; // 批量上传的文件数据列表
+}
+message PutMultiFileRsp {
+    string request_id = 1;
+    bool success = 2;
+    string errmsg = 3; 
+    repeated FileMessageInfo file_info = 4; // 批量返回文件元信息列表
+}
+
+/* ============================================================
+ * 5. 定义 RPC 服务接口
+ * ============================================================ */
+service FileService {
+    // 下载单个文件
+    rpc GetSingleFile(GetSingleFileReq) returns (GetSingleFileRsp);
+    // 批量下载文件
+    rpc GetMultiFile(GetMultiFileReq) returns (GetMultiFileRsp);
+    // 上传单个文件
+    rpc PutSingleFile(PutSingleFileReq) returns (PutSingleFileRsp);
+    // 批量上传文件
+    rpc PutMultiFile(PutMultiFileReq) returns (PutMultiFileRsp);
+}

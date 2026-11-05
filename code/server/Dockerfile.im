@@ -1,0 +1,17 @@
+# 通用服务镜像：构建上下文是 server 根目录，通过 SERVICE 参数选择二进制
+FROM ubuntu:26.04
+
+ARG SERVICE
+ENV DEBIAN_FRONTEND=noninteractive
+
+WORKDIR /im
+RUN mkdir -p /im/bin /im/data /im/logs
+
+# 运行期依赖库（由 collect_depends.sh 从宿主机收集）
+COPY depends/ /usr/lib/x86_64-linux-gnu/
+
+# 目标二进制
+COPY ${SERVICE}/build/${SERVICE}_server /im/bin/${SERVICE}_server
+RUN chmod +x /im/bin/${SERVICE}_server
+
+CMD ["/bin/sh", "-c", "exec /im/bin/${SERVICE}_server"]

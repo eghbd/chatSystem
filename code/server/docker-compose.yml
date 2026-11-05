@@ -1,0 +1,273 @@
+name: bite-im
+
+# ------------------------------------------------------------------
+# 通用片段
+# ------------------------------------------------------------------
+x-common: &common
+  restart: unless-stopped
+  networks: [im-net]
+  logging:
+    driver: json-file
+    options:
+      max-size: "10m"
+      max-file: "3"
+
+x-im-build: &im-build
+  context: .
+  dockerfile: Dockerfile.im
+
+networks:
+  im-net:
+    driver: bridge
+
+volumes:
+  etcd-data:
+  mysql-data:
+  redis-data:
+  mq-data:
+  es-data:
+  file-data:
+
+services:
+  # ================= 中间件 =================
+  etcd:
+    image: quay.io/coreos/etcd:v3.5.21
+    <<: *common
+    command:
+      - /usr/local/bin/etcd
+      - --name=etcd
+      - --data-dir=/etcd-data
+      - --advertise-client-urls=http://etcd:2379
+      - --listen-client-urls=http://0.0.0.0:2379
+    volumes:
+      - etcd-data:/etcd-data
+    healthcheck:
+      test: ["CMD", "etcdctl", "--endpoints=http://127.0.0.1:2379", "endpoint", "health"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+
+  mysql:
+    image: mysql:8.4
+    <<: *common
+    environment:
+      MYSQL_ROOT_PASSWORD: "123456"
+      MYSQL_DATABASE: "bite_im"
+    command:
+      - --character-set-server=utf8mb4
+      - --collation-server=utf8mb4_unicode_ci
+    volumes:
+      - mysql-data:/var/lib/mysql
+      - ./sql:/docker-entrypoint-initdb.d:ro
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h127.0.0.1", "-uroot", "-p123456"]
+      interval: 5s
+      timeout: 5s
+      retries: 30
+
+  redis:
+    image: redis:7-alpine
+    <<: *common
+    command: ["redis-server", "--appendonly", "yes"]
+    volumes:
+      - redis-data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+
+  rabbitmq:
+    image: rabbitmq:3.13-management
+    <<: *common
+    environment:
+      # 注意：guest 只允许本机登录，跨容器必须自建用户
+      RABBITMQ_DEFAULT_USER: im
+      RABBITMQ_DEFAULT_PASS: "123456"
+    volumes:
+      - mq-data:/var/lib/rabbitmq
+    healthcheck:
+      test: ["CMD", "rabbitmq-diagnostics", "-q", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 20
+
+  elasticsearch:
+    image: docker.elastic.co/elasticsearch/elasticsearch:7.17.29
+    <<: *common
+    environment:
+      - discovery.type=single-node
+      - xpack.security.enabled=false
+      - ES_JAVA_OPTS=-Xms512m -Xmx512m
+    ulimits:
+      memlock:
+        soft: -1
+        hard: -1
+    volumes:
+      - es-data:/usr/share/elasticsearch/data
+    healthcheck:
+      test: ["CMD-SHELL", "curl -sf http://127.0.0.1:9200/_cluster/health >/dev/null || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 30
+
+  # ================= 业务服务 =================
+  file:
+    build:
+      <<: *im-build
+      args:
+        SERVICE: file
+    image: im/file
+    <<: *common
+    command:
+      - /im/bin/file_server
+      - --flagfile=/im/conf/file_server.conf
+    volumes:
+      - file-data:/im/data
+      - ./conf-docker/file_server.conf:/im/conf/file_server.conf:ro
+    depends_on:
+      etcd:
+        condition: service_healthy
+
+  speech:
+    build:
+      <<: *im-build
+      args:
+        SERVICE: speech
+    image: im/speech
+    <<: *common
+    command:
+      - /im/bin/speech_server
+      - --flagfile=/im/conf/speech_server.conf
+    volumes:
+      - ./conf-docker/speech_server.conf:/im/conf/speech_server.conf:ro
+    depends_on:
+      etcd:
+        condition: service_healthy
+
+  user:
+    build:
+      <<: *im-build
+      args:
+        SERVICE: user
+    image: im/user
+    <<: *common
+    command:
+      - /im/bin/user_server
+      - --flagfile=/im/conf/user_server.conf
+    volumes:
+      - ./conf-docker/user_server.conf:/im/conf/user_server.conf:ro
+    depends_on:
+      etcd:
+        condition: service_healthy
+      mysql:
+        condition: service_healthy
+      redis:
+        condition: service_started
+      elasticsearch:
+        condition: service_healthy
+      file:
+        condition: service_started
+
+  message:
+    build:
+      <<: *im-build
+      args:
+        SERVICE: message
+    image: im/message
+    <<: *common
+    command:
+      - /im/bin/message_server
+      - --flagfile=/im/conf/message_server.conf
+    volumes:
+      - ./conf-docker/message_server.conf:/im/conf/message_server.conf:ro
+    depends_on:
+      etcd:
+        condition: service_healthy
+      mysql:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+      elasticsearch:
+        condition: service_healthy
+      user:
+        condition: service_started
+
+  transmite:
+    build:
+      <<: *im-build
+      args:
+        SERVICE: transmite
+    image: im/transmite
+    <<: *common
+    command:
+      - /im/bin/transmite_server
+      - --flagfile=/im/conf/transmite_server.conf
+    volumes:
+      - ./conf-docker/transmite_server.conf:/im/conf/transmite_server.conf:ro
+    depends_on:
+      etcd:
+        condition: service_healthy
+      mysql:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+      user:
+        condition: service_started
+
+  friend:
+    build:
+      <<: *im-build
+      args:
+        SERVICE: friend
+    image: im/friend
+    <<: *common
+    command:
+      - /im/bin/friend_server
+      - --flagfile=/im/conf/friend_server.conf
+    volumes:
+      - ./conf-docker/friend_server.conf:/im/conf/friend_server.conf:ro
+    depends_on:
+      etcd:
+        condition: service_healthy
+      mysql:
+        condition: service_healthy
+      elasticsearch:
+        condition: service_healthy
+      user:
+        condition: service_started
+      message:
+        condition: service_started
+
+  gateway:
+    build:
+      <<: *im-build
+      args:
+        SERVICE: gateway
+    image: im/gateway
+    <<: *common
+    command:
+      - /im/bin/gateway_server
+      - --flagfile=/im/conf/gateway_server.conf
+    ports:
+      - "10007:10007"
+      - "10008:10008"
+    volumes:
+      - ./conf-docker/gateway_server.conf:/im/conf/gateway_server.conf:ro
+    depends_on:
+      etcd:
+        condition: service_healthy
+      redis:
+        condition: service_started
+      file:
+        condition: service_started
+      speech:
+        condition: service_started
+      user:
+        condition: service_started
+      message:
+        condition: service_started
+      transmite:
+        condition: service_started
+      friend:
+        condition: service_started

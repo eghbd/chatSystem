@@ -1,0 +1,63 @@
+syntax = "proto3";        // 使用 proto3 语法
+package bite_im;          // 命名空间
+import "base.proto";      // 引入基础数据结构（UserInfo, ChatSessionInfo, MessageInfo 等）
+
+// 允许生成通用的 RPC 服务代码
+option cc_generic_services = true;
+
+/* ============================================================
+ * 1. 通知事件类型枚举
+ * ============================================================ */
+enum NotifyType {
+    FRIEND_ADD_APPLY_NOTIFY = 0;   // 好友添加申请（有人加你）
+    FRIEND_ADD_PROCESS_NOTIFY = 1; // 好友申请处理结果（别人同意/拒绝了你的申请）
+    CHAT_SESSION_CREATE_NOTIFY = 2;// 新建会话通知（比如建了一个群聊）
+    CHAT_MESSAGE_NOTIFY = 3;       // 新消息通知（有人给你发消息了）
+    FRIEND_REMOVE_NOTIFY = 4;      // 好友删除通知（有人把你删了）
+}
+
+/* ============================================================
+ * 2. 各个事件的详细数据结构 (Payload)
+ * ============================================================ */
+// 好友申请通知的内容
+message NotifyFriendAddApply {
+    UserInfo user_info = 1; // 申请人的个人信息（让你知道是谁加你）
+} 
+
+// 好友申请处理通知的内容
+message NotifyFriendAddProcess {
+    bool agree = 1;         // 处理结果：true 同意，false 拒绝
+    UserInfo user_info = 2; // 处理人信息（让你知道是谁同意了你的好友）
+} 
+
+// 好友删除通知的内容
+message NotifyFriendRemove {
+    string user_id = 1;     // 把你删除的那个人的用户 ID
+} 
+
+// 新建会话通知的内容
+message NotifyNewChatSession {
+    ChatSessionInfo chat_session_info = 1; // 新建的会话详情（群名、成员等）
+} 
+
+// 新消息通知的内容
+message NotifyNewMessage {
+    MessageInfo message_info = 1; // 新消息的详细内容（发送者、时间、文本内容等）
+} 
+
+/* ============================================================
+ * 3. 统一的推送外壳 (Envelope)
+ * ============================================================ */
+message NotifyMessage {
+    optional string notify_event_id = 1; // 通知事件的操作ID（用于追踪）
+    NotifyType notify_type = 2;          // 告诉客户端这是什么类型的事件
+
+    // 核心：事件备注信息（同一时刻只会包含其中一种）
+    oneof notify_remarks { 
+        NotifyFriendAddApply friend_add_apply = 3;
+        NotifyFriendAddProcess friend_process_result = 4;
+        NotifyFriendRemove friend_remove = 7;
+        NotifyNewChatSession new_chat_session_info = 5;
+        NotifyNewMessage new_message_info = 6;
+    } 
+}

@@ -1,0 +1,50 @@
+# 构建产物（七个服务各自 build/，含 .pb.cc/.pb.h 与可执行文件）
+**/build/
+**/CMakeFiles/
+CMakeCache.txt
+cmake_install.cmake
+*.o
+*.obj
+*.a
+*.so
+*.so.*
+*.exe
+
+# protobuf / Qt 生成代码
+*.pb.h
+*.pb.cc
+moc_*.cpp
+ui_*.h
+qrc_*.cpp
+
+# 备份与临时文件
+*.bak
+*.bak.*
+*.real.*
+*.orig
+*.rej
+*~
+
+# 日志
+*.log
+*.out.log
+*.err.log
+
+# 依赖二进制（由 collect_depends.sh 在编译机生成，不入库）
+code/server/depends/
+
+# 本地敏感配置：真实密码与云服务密钥不入库，另存 .conf.example
+code/server/conf/*.conf
+!code/server/conf/*.conf.example
+code/server/conf-docker/*.conf
+!code/server/conf-docker/*.conf.example
+
+# 编辑器 / IDE
+.vscode/
+.idea/
+CMakeLists.txt.user*
+*.user
+
+# 系统
+.DS_Store
+Thumbs.db
